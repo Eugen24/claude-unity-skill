@@ -197,6 +197,17 @@ README.md
 
 ---
 
+## Pair with caveman for token efficiency
+
+[caveman](https://github.com/JuliusBrussee/caveman) is a Claude Code skill that strips AI responses down to the minimum — no summaries, no explanations, just the output. Pair it with `/unity-safe` on large sessions to cut token usage significantly.
+
+```
+/caveman
+/unity-safe add a quest tracking system
+```
+
+---
+
 ## License
 
 MIT
