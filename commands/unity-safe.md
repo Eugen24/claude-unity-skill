@@ -13,7 +13,7 @@
    → Ask before changing. Propose a new script or extension first.
 
 3. **Is this a file created in this session, or a clearly owned project script?**
-   → Safe. Proceed, but still follow clean architecture rules.
+   → Safe. Proceed, but still follow the architecture and code rules below.
 
 ---
 
@@ -22,44 +22,146 @@
 Read the project before writing anything:
 
 ```
-ls Assets/                        → map vendor vs project folders
-cat Packages/manifest.json        → UPM packages
-cat CLAUDE.md                     → team rules (if exists)
-find Assets -name "*.asmdef"      → assembly boundaries
+ls Assets/                          → map vendor vs project folders
+cat Packages/manifest.json          → UPM packages
+cat CLAUDE.md                       → saved architecture, decisions, feature log
+find Assets -name "*.asmdef"        → assembly boundaries
 ```
 
 Identify and remember:
-- **Safe folders** — team-owned scripts (`Assets/Scripts/`, `Assets/[ProjectName]/`, etc.)
-- **Vendor folders** — everything else (`Assets/Plugins/`, named asset folders, etc.)
-- **Modified vendor files** — files with a `// CUSTOM` header (already intentionally changed)
-- **Save / persistence system** — PlayerPrefs / file-based / cloud
-- **UI system** — UGUI / UI Toolkit / third-party
-- **Key singletons / managers** — what already exists so new scripts don't duplicate them
+- **Safe folders** — team-owned scripts
+- **Vendor folders** — everything else
+- **Existing architecture style** — feature-based / layer-based / flat / mixed / none
+- **Modified vendor files** — any file with a `// CUSTOM` header
+- **Key singletons / managers** — what already exists so nothing gets duplicated
+- **Save system, UI system, localization** — which vendors, which versions
 
 ---
 
-## STEP 2 — CLASSIFY EVERY FILE BEFORE TOUCHING IT
+## STEP 2 — ARCHITECTURE ASSESSMENT
+
+Before creating anything new, assess the project's architecture health. Do this by reading a sample of project scripts.
+
+### Rate the project on three axes:
+
+**Folder structure:**
+- `Clean` — feature-based or layer-based, consistent, no clutter
+- `Flat` — everything in one folder, navigable but unscaled
+- `Messy` — mixed vendor/project files, no clear ownership, random nesting
+
+**Code quality:**
+- `Clean` — single responsibility, events, cached refs, proper lifecycle
+- `Mixed` — some good, some spaghetti
+- `Legacy` — public fields, Update polling, scattered FindObjectOfType
+
+**Naming:**
+- `Consistent` — clear convention followed throughout
+- `Mixed` — some convention, some not
+- `None` — no visible pattern
+
+### Choose the right strategy based on the rating:
+
+| Folder | Code | Strategy |
+|---|---|---|
+| Clean | Clean | **Extend** — follow existing patterns exactly |
+| Clean | Mixed | **Extend + Refactor** — add new code clean, note debt |
+| Flat | Any | **Organise** — introduce feature folders for new code only |
+| Messy | Any | **Isolate** — create a clean `[ProjectName]/` root, put all new code there, never mix into the mess |
+| Any | Legacy | **Don't touch legacy** — write new code clean alongside it, bridge where needed |
+
+**Never refactor existing code unless explicitly asked. Note the debt, don't fix it.**
+
+---
+
+## STEP 3 — FOLDER ARCHITECTURE
+
+### For clean or flat projects — follow what exists
+
+Read 3–5 existing script paths to detect the current convention, then match it exactly.
+
+### For messy projects — build a clean root
+
+Create this structure under `Assets/[ProjectName]/` (or `Assets/Scripts/` if no project name is clear):
+
+```
+Assets/[ProjectName]/
+├── Core/               ← singletons, bootstrapping, app lifecycle
+├── Features/
+│   ├── [FeatureName]/  ← one folder per feature (see below)
+│   └── ...
+├── Data/               ← ScriptableObject definitions, config assets
+├── UI/                 ← UI-specific scripts and bridges
+├── SaveSystem/         ← save/load wrappers and facades
+├── Extensions/         ← extension methods for vendor classes
+├── Bridges/            ← event bridges connecting vendor systems
+└── Editor/             ← editor-only tools, inspectors, windows
+```
+
+### Feature folder structure (inside `Features/[FeatureName]/`)
+
+```
+Features/Inventory/
+├── InventorySystem.cs          ← core logic (no MonoBehaviour if possible)
+├── InventoryController.cs      ← MonoBehaviour that drives InventorySystem
+├── InventoryUI.cs              ← UI bridge — reads system, updates views
+├── InventoryData.cs            ← ScriptableObject — item definitions, config
+├── IInventorySystem.cs         ← interface (if other systems need to talk to it)
+└── Editor/
+    └── InventoryEditor.cs      ← custom inspector (if needed)
+```
+
+**Naming rules for new files:**
+- MonoBehaviour that drives logic: `[Feature]Controller.cs`
+- Pure C# logic class: `[Feature]System.cs`
+- UI connector: `[Feature]UI.cs` or `[Feature]HUD.cs`
+- Data container (ScriptableObject): `[Feature]Data.cs` or `[Feature]Config.cs`
+- Interface: `I[Feature]System.cs`
+- Bridge between two vendor systems: `[VendorA]To[VendorB]Bridge.cs`
+- Extension methods: `[VendorClass]Extensions.cs`
+
+---
+
+## STEP 4 — FEATURE PLANNING (before writing any new feature)
+
+When asked to create a new system or feature, **plan before coding**. Produce this block and confirm with the user before writing any file:
+
+```
+FEATURE         [name]
+SCOPE           [what it does in 2 sentences]
+FILES TO CREATE [list each file, its type, its responsibility]
+FILES TO TOUCH  [existing files affected — vendor or project]
+DEPENDENCIES    [what this feature needs from other systems]
+PATTERN         [which integration patterns will be used: A/B/C/D/E/F/G]
+FOLDER          [where new files go]
+SAVE DATA       [does this feature persist anything? how?]
+OPEN QUESTIONS  [anything that needs a decision before coding starts]
+```
+
+Only start writing files after the user confirms this plan.
+
+---
+
+## STEP 5 — CLASSIFY EVERY FILE BEFORE TOUCHING IT
 
 | Location | Classification | Rule |
 |---|---|---|
 | `Library/PackageCache/` or `Packages/com.*/` | UPM package | **Never edit** |
 | `Assets/Plugins/[AnyVendor]/` | Installed asset | **Never edit** |
 | `Assets/[AssetStoreName]/` | Installed asset | **Never edit** |
-| Project safe folder (Phase 1) | Team-owned | Edit freely |
-| File with `// CUSTOM` header | Previously modified vendor | Edit only the custom section; keep header updated |
+| Project safe folder (Step 1) | Team-owned | Edit freely |
+| File with `// CUSTOM` header | Modified vendor | Edit only the custom section; keep header updated |
 | New file being created now | New | Write fresh |
 
 **When in doubt: create a new script. Never assume a file is safe.**
 
 ---
 
-## STEP 3 — PATTERN SELECTION
+## STEP 6 — PATTERN SELECTION
 
 Pick the right pattern before writing any code.
 
 ### A — Companion MonoBehaviour
-Add behaviour to a vendor component without touching its script.
-Attach to the **same GameObject**.
+Add behaviour to a vendor component without touching its script. Attach to the **same GameObject**.
 
 ```csharp
 [AddComponentMenu("MyProject/MyFeature Bridge")]
@@ -67,21 +169,15 @@ public class MyFeatureBridge : MonoBehaviour
 {
     [SerializeField] private VendorComponent _vendor;
 
-    private void Awake()
-    {
-        if (_vendor == null) _vendor = GetComponent<VendorComponent>();
-    }
-
+    private void Awake()     { if (_vendor == null) _vendor = GetComponent<VendorComponent>(); }
     private void OnEnable()  => _vendor.SomeEvent += OnEvent;
     private void OnDisable() => _vendor.SomeEvent -= OnEvent;
-
-    private void OnEvent() { /* new behaviour */ }
+    private void OnEvent()   { /* new behaviour */ }
 }
 ```
 
 ### B — Extension Method
-Add utility methods to a vendor class using only its public API.
-New file in your safe folder.
+Add utility methods to a vendor class using only its public API. New file in `Extensions/`.
 
 ```csharp
 namespace MyProject.Extensions
@@ -98,11 +194,10 @@ namespace MyProject.Extensions
 ```
 
 ### C — Event Bridge
-Connect two systems that cannot know about each other.
-Subscribes to System A, reacts, drives System B.
-Neither system is modified.
+Connect two systems without modifying either. New file in `Bridges/`.
 
 ```csharp
+[AddComponentMenu("MyProject/Localization Dropdown Bridge")]
 public class LocalizationDropdownBridge : MonoBehaviour
 {
     [SerializeField] private VendorDropdown _dropdown;
@@ -119,20 +214,19 @@ public class LocalizationDropdownBridge : MonoBehaviour
 ```
 
 ### D — ScriptableObject Config
-Externalise data or settings that would otherwise require editing a vendor file.
-Vendor code reads from an asset reference — point it at your ScriptableObject.
+Externalise vendor settings to your own asset. Point the vendor's asset reference at it.
 
 ```csharp
-[CreateAssetMenu(menuName = "MyProject/DropdownTheme")]
-public class DropdownThemeConfig : VendorThemeBase
+[CreateAssetMenu(menuName = "MyProject/Theme Config")]
+public class ThemeConfig : VendorThemeBase
 {
-    public override Color PrimaryColor => myColor;
+    public override Color PrimaryColor => _primaryColor;
+    [SerializeField] private Color _primaryColor;
 }
 ```
 
 ### E — Subclass Override
-When vendor class is not sealed and you control instantiation.
-Replace the vendor component with your subclass on the prefab.
+Change vendor behaviour when you control the prefab. Vendor class must not be sealed.
 
 ```csharp
 public class MyDropdown : VendorDropdown
@@ -140,93 +234,82 @@ public class MyDropdown : VendorDropdown
     protected override void OnItemSelected(int index)
     {
         base.OnItemSelected(index);
-        // extra behaviour
+        // additional behaviour
     }
 }
 ```
 
-### F — [RuntimeInitializeOnLoadMethod]
-Hook into startup order without touching any existing file.
+### F — RuntimeInitializeOnLoadMethod
+Hook startup without touching any existing file.
 
 ```csharp
 internal static class ProjectBootstrap
 {
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    private static void Init()
-    {
-        // register, patch, subscribe — zero file modifications
-    }
+    private static void Init() { /* register, subscribe, inject */ }
 }
 ```
 
-### G — Wrapper / Facade
-Hide a vendor API behind your own interface so only one file needs updating if the vendor changes.
+### G — Facade / Wrapper
+Shield your code from vendor API changes. Only one file updates when the vendor changes.
 
 ```csharp
-// Your code calls ISaveSystem, never the vendor directly
 public interface ISaveSystem { void Save(int slot); bool HasKey(string key, int slot); }
-
-public class HybridSaveFacade : ISaveSystem { /* wraps vendor save calls */ }
+public class VendorSaveFacade : ISaveSystem { /* thin wrapper over vendor API */ }
 ```
 
 **Pattern decision guide:**
 
-| Need | Pattern |
-|---|---|
-| Add behaviour to vendor GameObject | A — Companion |
-| Add methods to vendor class | B — Extension |
-| Connect two vendor systems | C — Bridge |
-| Change vendor config/settings | D — ScriptableObject |
-| Change vendor logic and control prefab | E — Subclass |
-| Hook startup, no file touched | F — RuntimeInitialize |
-| Protect project from vendor API changes | G — Facade/Wrapper |
+| Need | Pattern | Folder |
+|---|---|---|
+| Add behaviour to vendor GameObject | A — Companion | `Bridges/` or `Features/[X]/` |
+| Add methods to vendor class | B — Extension | `Extensions/` |
+| Connect two vendor systems | C — Bridge | `Bridges/` |
+| Change vendor config / settings | D — ScriptableObject | `Data/` |
+| Change vendor logic, own the prefab | E — Subclass | `Features/[X]/` |
+| Hook startup, zero file touched | F — RuntimeInitialize | `Core/` |
+| Protect from vendor API changes | G — Facade | `SaveSystem/` or `Core/` |
 
 ---
 
-## STEP 4 — IF A VENDOR FILE MUST BE EDITED (last resort only)
+## STEP 7 — IF A VENDOR FILE MUST BE EDITED (last resort only)
 
 Only proceed if all patterns above genuinely cannot solve it.
 
-1. **Ask the user**: explain specifically why no new script solves it.
+1. **Ask the user first.** Explain specifically why no new script works.
 2. Make the smallest possible change.
-3. Add this header to the file:
+3. Add this header to the top of the file:
 
 ```csharp
 // CUSTOM — [YYYY-MM-DD]
-// Changed: [exactly what was added or modified]
-// Why:     [why a companion/bridge/extension could not solve it]
-// Risk:    [which vendor update will overwrite this]
-// Re-apply: [the exact changes to re-apply after that update]
+// Changed:   [exactly what was added or modified]
+// Why:       [why a companion/bridge/extension could not solve it]
+// Risk:      [which vendor update will overwrite this]
+// Re-apply:  [the exact changes to re-apply after that update]
 ```
 
-4. Add an entry to `CLAUDE.md`:
-
-```markdown
-## Modified Vendor Files
-| File | Changed | Risk | Re-apply after |
-|------|---------|------|----------------|
-| Assets/I2/.../SetLanguageDropdown.cs | Added OnLocalizeEvent subscription | I2 reimport | See CUSTOM header |
-```
+4. Record it in `CLAUDE.md` (Step 11).
 
 ---
 
-## STEP 5 — CLEAN CODE RULES FOR NEW SCRIPTS
+## STEP 8 — CLEAN CODE RULES FOR NEW SCRIPTS
 
 ### Structure
 ```
 ✓ One responsibility per class
-✓ Namespace matching project convention (never global namespace)
+✓ Namespace: [ProjectName].[Feature] — never global namespace
 ✓ [AddComponentMenu("MyProject/...")] on every MonoBehaviour
-✓ [SerializeField] private — not public fields for inspector exposure
+✓ [SerializeField] private — never public fields for Inspector exposure
 ✓ Constants or ScriptableObject for magic strings/numbers — never inline
-✓ Editor-only code in #if UNITY_EDITOR blocks or a separate Editor/ folder
+✓ Editor-only code in #if UNITY_EDITOR or a dedicated Editor/ subfolder
+✓ Interfaces for anything two systems share (IHealthSystem, ISaveSystem, etc.)
 ```
 
 ### MonoBehaviour lifecycle — strict ordering
 ```
-Awake       → cache all GetComponent / FindObjectOfType references (once only)
+Awake       → cache all GetComponent / FindObjectOfType (once, never repeated)
 OnEnable    → subscribe to events and signals
-Start       → logic that needs other Awake to have run first
+Start       → logic that requires other objects' Awake to have completed
 Update      → read state only; no allocation, no search, no subscribe
 OnDisable   → unsubscribe everything subscribed in OnEnable
 OnDestroy   → unsubscribe from static / C# events not covered by OnDisable
@@ -234,107 +317,170 @@ OnDestroy   → unsubscribe from static / C# events not covered by OnDisable
 
 ### Events
 ```
-✓ RemoveListener / -= before AddListener / += on every subscribe path
-✓ Null-check or IsExiting guard on unsubscribe (prevents errors on app quit)
-✓ Prefer C# events over UnityEvents for runtime-only subscriptions (no allocation)
-✓ UnityEvent for designer-wired connections in the Inspector
+✓ RemoveListener / -= before AddListener / += on every subscribe path (no duplicates)
+✓ Guard unsubscribe with null check or ApplicationManager.IsExiting equivalent
+✓ C# events for runtime-only connections (no allocation, faster invoke)
+✓ UnityEvent for designer-wired Inspector connections
+✓ Static events: always unsubscribe in OnDestroy to prevent stale references after scene reload
 ```
 
-### Performance — red flags (fix immediately when found)
+### Performance — flag and fix immediately
 ```
-✗ GetComponent<T>() in Update / FixedUpdate / LateUpdate → cache in Awake
-✗ FindObjectOfType at runtime outside Awake → cache or use events
-✗ new List / new string / new closure inside Update → pre-allocate
-✗ Canvas.ForceUpdateCanvases() per element in a loop → mark dirty in loop, flush once after
-✗ LayoutRebuilder.ForceRebuildLayoutImmediate per element → same, batch then flush
-✗ Resources.FindObjectsOfTypeAll in hot paths → cache, invalidate on scene load only
-✗ PlayerPrefs for per-slot gameplay data → use proper save system (not cloud-safe)
-✗ Coroutine started per-object per-frame → centralise in one manager
-✗ string concatenation in Update → StringBuilder or cached format
-✗ Physics.Raycast without LayerMask → hits every layer, wastes CPU
-✗ Camera.main in Update → cache (searches tagged objects every call pre-2022)
+✗ GetComponent<T>() in Update / FixedUpdate → cache in Awake
+✗ FindObjectOfType outside Awake → cache or use events
+✗ new List / new string / closure inside Update → pre-allocate
+✗ Canvas.ForceUpdateCanvases() per element → mark dirty in loop, flush once after
+✗ LayoutRebuilder.ForceRebuildLayoutImmediate per element → same
+✗ Camera.main in Update (pre-2022) → cache in Awake
+✗ Physics.Raycast without LayerMask → hits every layer
+✗ PlayerPrefs for per-slot gameplay data → proper save system
+✗ Coroutine per object per frame → centralise in manager
+✗ String concat in Update → StringBuilder or cached
 ```
 
 ### Correctness traps
 ```
-✗ .ToString() on a property wrapper → returns editor label, not runtime value
-   Fix: use .Get(args) or the type's value accessor
-
-✗ PlayerPrefs.GetFloat on a key written with SetInt → returns 0
-   Fix: always use matching Get/Set type
-
-✗ Renaming a [SerializeField] field → silently loses all scene/prefab data
-   Fix: add [FormerlySerializedAs("oldName")] before renaming
-
-✗ Adding [RequireComponent] to existing script → adds component to every prefab on reimport
-   Fix: ask user before adding this attribute to an existing script
-
-✗ using System.Diagnostics → shadows UnityEngine.Debug
-   Fix: remove it; use UnityEngine.Debug directly
-
-✗ Path.Combine missing → string concatenation for file paths breaks on different OS
-   Fix: always use Path.Combine / Path.Join
-
-✗ async void on a MonoBehaviour method → exceptions are swallowed silently
-   Fix: use async Task and handle exceptions explicitly
+✗ .ToString() on property wrapper → editor label, not value → use .Get(args)
+✗ GetFloat on key written with SetInt → 0 → match types
+✗ Renaming [SerializeField] → lost scene data → [FormerlySerializedAs]
+✗ [RequireComponent] on existing script → adds to all prefabs on reimport → ask first
+✗ using System.Diagnostics → shadows UnityEngine.Debug → remove it
+✗ async void → exceptions swallowed → use async Task
+✗ Raw string path concat → OS-specific failure → Path.Combine
+✗ Hardcoded encryption keys → not secure → flag to user
 ```
 
 ### Serialization safety
 ```csharp
-// Renaming a field — always do this or scene data is lost silently:
-[FormerlySerializedAs("m_OldFieldName")]
-[SerializeField] private float m_NewFieldName;
+// Renaming a field:
+[FormerlySerializedAs("m_OldName")]
+[SerializeField] private float m_NewName;
 
-// Changing a field type — write a migration, don't just change the type.
-// Changing a class name — update all [SerializeReference] usages.
+// Changing a field type: write a migration, never just change the type.
+// Changing a class name: update all [SerializeReference] usages first.
 ```
 
-### AI-tool safety (prevents silent breakage by any AI tool)
+### AI-tool safety (any tool — Claude Code, Cursor, Copilot, Codex)
 ```
 Never generate code inside a vendor folder
 Never remove // CUSTOM headers
 Never delete .meta files
 Never move files inside Assets/Plugins/ (breaks GUIDs)
-Never add [ExecuteInEditMode] or [ExecuteAlways] without explicit user confirmation
-Never change [DefaultExecutionOrder] without checking all dependent components
-Never commit ProjectSettings/ changes without confirming cross-platform impact
-Never use Assembly.GetTypes() or reflection on vendor assemblies
+Never add [ExecuteInEditMode] without explicit user confirmation
+Never change [DefaultExecutionOrder] without checking all dependents
+Never modify ProjectSettings/ without confirming cross-platform impact
 ```
 
 ---
 
-## STEP 6 — ALWAYS STATE BEFORE WRITING CODE
+## STEP 9 — BEFORE WRITING CODE, ALWAYS STATE
 
 ```
-FILES READ      path — what it does (1 line each)
-CLASSIFICATION  vendor / safe for each file
-PATTERN         A/B/C/D/E/F/G — one-line reason, or "direct edit — safe"
-PLAN            one sentence describing exactly what will be created or changed
-UPDATE SAFE?    yes — survives all updates
-                at risk — [which vendor update breaks it and why]
+ARCHITECTURE    [Clean/Flat/Messy] — strategy chosen
+FILES READ      path — what it does
+CLASSIFICATION  vendor / safe for each
+PATTERN         A–G — one-line reason, or "direct edit — safe"
+PLAN            what will be created or changed (one sentence per file)
+FOLDER          where new files go
+UPDATE SAFE?    yes / at risk: [which update, why]
 ```
 
-Write code only after this block.
+Write code only after this block is complete.
 
 ---
 
-## STEP 7 — OUTPUT FORMAT (every response)
+## STEP 10 — OUTPUT FORMAT (every response)
 
 ```
 PATTERN     [chosen pattern + reason]
 FILES READ  [path | purpose]
 SAFE?       [yes / at risk: explain]
 CODE        [new file or minimal diff]
-TEST        [what to verify in editor]
+TEST        [what to verify in the editor]
 ```
 
 Short. Direct. No preamble. No trailing summary.
 
 ---
 
-## STEP 8 — OPTIMISATION AUDIT
+## STEP 11 — SAVE EVERYTHING TO CLAUDE.MD
 
-When asked to optimise, run this checklist first. Report file + line for each hit. Then fix highest-impact items first.
+After every session that creates, modifies, or plans scripts — update `CLAUDE.md` in the project root.
+
+`CLAUDE.md` is the project memory. Every AI tool reads it on the next session. Keep it accurate.
+
+### CLAUDE.md structure:
+
+```markdown
+# [Project Name] — Architecture
+
+## Project Structure
+[Short description of folder layout and conventions]
+
+## Safe Folders
+- Assets/[ProjectName]/Scripts/ — project-owned, edit freely
+- Assets/Plugins/GameCreator/Hub/ — GC extension point (safe)
+
+## Vendor Folders (never edit)
+- Assets/Plugins/[Vendor]/
+- Assets/[AssetName]/
+
+## Architecture Style
+[feature-based / layer-based / flat]
+Namespace: [YourNamespace]
+New scripts go in: Assets/[ProjectName]/Scripts/
+
+## Key Systems
+| System | File | Purpose |
+|--------|------|---------|
+| Save | HybridSave/ | Local + cloud save via UCS |
+| UI | Dark - Complete Horror UI | Michsky DropdownManager etc. |
+| Localization | I2/ | I2.Loc.LocalizationManager |
+
+## Modified Vendor Files
+| File | Changed | Re-apply after |
+|------|---------|----------------|
+| Assets/I2/.../SetLanguageDropdown.cs | See CUSTOM header | I2 reimport |
+
+## Active Features (in progress)
+| Feature | Folder | Status | Notes |
+|---------|--------|--------|-------|
+| Inventory | Features/Inventory/ | In progress | Controller done, UI pending |
+
+## Completed Features
+| Feature | Folder | Notes |
+|---------|--------|-------|
+| Quest flags | Features/Quests/ | Synced via QuestFlagSync.cs |
+
+## Known Tech Debt
+| Location | Issue | Priority |
+|----------|-------|----------|
+| Assets/OldScripts/ | Public fields, no namespaces | Low |
+
+## Decisions
+| Decision | Reason | Date |
+|----------|--------|------|
+| Quest flags → GC variables, not raw PlayerPrefs | Cloud-safe via HybridSave | 2026-04-14 |
+```
+
+### When to update CLAUDE.md:
+- After creating any new script → add to Active or Completed Features
+- After modifying a vendor file → add to Modified Vendor Files
+- After making an architecture decision → add to Decisions
+- After finishing a feature → move from Active to Completed
+- When discovering tech debt → add to Known Tech Debt
+
+### CLAUDE.md rules for AI tools:
+- Do not delete existing entries
+- Do not overwrite Decisions without noting the change
+- Always append to Known Tech Debt, never remove items silently
+- Modified Vendor Files entries are permanent until the change is removed from the file
+
+---
+
+## STEP 12 — OPTIMISATION AUDIT
+
+When asked to optimise, run this checklist first. Report file + line for each hit, then fix highest-impact first.
 
 ```
 [ ] GetComponent in Update/FixedUpdate/LateUpdate
@@ -344,33 +490,34 @@ When asked to optimise, run this checklist first. Report file + line for each hi
 [ ] ForceRebuildLayoutImmediate per element
 [ ] Camera.main in Update (pre-Unity 2022)
 [ ] Raycast/Overlap without LayerMask
-[ ] PlayerPrefs for gameplay state (not cloud-safe)
-[ ] Static C# events not unsubscribed (memory leak / stale ref after scene reload)
-[ ] Texture2D created at runtime and never disposed
-[ ] AudioClip loaded via Resources and never released
-[ ] DontDestroyOnLoad objects that re-register handlers on every scene load
-[ ] Update polling a condition that could be an event
-[ ] Coroutine started per-object instead of centralised
+[ ] PlayerPrefs for gameplay state
+[ ] Static C# events not unsubscribed (leak / stale ref after reload)
+[ ] Texture2D created at runtime, never disposed
+[ ] AudioClip loaded via Resources, never released
+[ ] DontDestroyOnLoad objects re-registering on every scene load
+[ ] Update polling a condition that could be event-driven
+[ ] Coroutine per-object instead of centralised manager
 [ ] String building per frame without StringBuilder
-[ ] Missing [DefaultExecutionOrder] on singletons that others depend on
+[ ] Missing [DefaultExecutionOrder] on singletons others depend on
 ```
 
 ---
 
-## STEP 9 — WHEN CREATING A NEW SCRIPT CHECKLIST
+## STEP 13 — NEW SCRIPT FINAL CHECKLIST
 
-Before finishing any new script, verify:
+Before marking any new script done:
 
 ```
-[ ] Correct namespace
-[ ] [AddComponentMenu] present
+[ ] Correct namespace ([ProjectName].[Feature])
+[ ] [AddComponentMenu] present on MonoBehaviours
 [ ] All GetComponent calls in Awake
 [ ] Events subscribed in OnEnable, unsubscribed in OnDisable
-[ ] No public fields (use [SerializeField] private)
-[ ] No magic strings — use constants or config asset
-[ ] No Debug.Log in non-editor paths
+[ ] No public fields — [SerializeField] private
+[ ] No magic strings — constants or ScriptableObject
+[ ] No Debug.Log outside #if UNITY_EDITOR
 [ ] If singleton: DontDestroyOnLoad + duplicate destroy guard
-[ ] If it touches save data: uses project save system, not raw PlayerPrefs
-[ ] If it creates objects: paired cleanup in OnDisable or OnDestroy
+[ ] If save data: uses project save system, not raw PlayerPrefs
+[ ] If creates objects: cleanup in OnDisable or OnDestroy
 [ ] FormerlySerializedAs on any renamed field
+[ ] CLAUDE.md updated with this script
 ```
