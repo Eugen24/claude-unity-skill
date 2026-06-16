@@ -15,19 +15,19 @@ Compatible with Claude Code, Cursor, Codex, or any AI tool that supports slash c
 
 **macOS / Linux / WSL** — global install:
 ```bash
-mkdir -p ~/.claude/commands && curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/unity-safe-claude-skill/main/commands/unity-safe.md -o ~/.claude/commands/unity-safe.md
+mkdir -p ~/.claude/commands && curl -fsSL https://raw.githubusercontent.com/Eugen24/claude-unity-skill/main/commands/unity-safe.md -o ~/.claude/commands/unity-safe.md
 ```
 
 **Windows PowerShell** — global install:
 ```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\commands" | Out-Null; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/YOUR_USERNAME/unity-safe-claude-skill/main/commands/unity-safe.md" -OutFile "$env:USERPROFILE\.claude\commands\unity-safe.md"
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\commands" | Out-Null; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Eugen24/claude-unity-skill/main/commands/unity-safe.md" -OutFile "$env:USERPROFILE\.claude\commands\unity-safe.md"
 ```
 
 ### Option 2 — Install script (after cloning)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/unity-safe-claude-skill.git
-cd unity-safe-claude-skill
+git clone https://github.com/Eugen24/claude-unity-skill.git
+cd claude-unity-skill
 ```
 
 **Global** (every Claude Code session on this machine):
